@@ -1,7 +1,6 @@
 package com.zerom.spring.batch.reader;
 
 import com.fasterxml.jackson.core.JsonParser;
-import com.zerom.spring.batch.entity.Authority;
 import com.zerom.spring.batch.entity.Pay;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,12 +9,16 @@ import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.JobScope;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.item.*;
+import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.JdbcCursorItemReader;
+import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.database.builder.JdbcCursorItemReaderBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.BeanPropertyRowMapper;
 import org.springframework.web.client.RestTemplate;
 
@@ -32,9 +35,14 @@ public class JdbcCursorItemReaderJobConfiguration {
     private final StepBuilderFactory stepBuilderFactory;
     private final DataSource dataSource;
 
-    private List<Authority> collectData = new ArrayList<>(); //Rest로 가져온 데이터를 리스트에 넣는다.
+    private List<OrderApiReadDto> collectData = new ArrayList<>(); //Rest로 가져온 데이터를 리스트에 넣는다.
 
-    private static final int chunkSize = 10;
+    private static final int chunkSize = 1;
+
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
 
     @Bean
     public Job jdbcCursorItemReaderJob() {
@@ -46,9 +54,9 @@ public class JdbcCursorItemReaderJobConfiguration {
     @Bean
     public Step jdbcCursorItemReaderStep() {
         return stepBuilderFactory.get("jdbcCursorItemReaderStep")
-                .<Authority, Authority>chunk(chunkSize)
-                .reader(restItemReader(null, null))
-                .writer(jdbcCursorItemWriter())
+                .<OrderApiReadDto, OrderApiReadDto>chunk(chunkSize)
+                .reader(ItemReader(restTemplate()))
+                .writer(tttt())
                 .build();
     }
 
@@ -64,32 +72,36 @@ public class JdbcCursorItemReaderJobConfiguration {
     }
 
     @Bean
-    @JobScope
-    public ItemReader<Authority> restItemReader(@Value("#{jobParameters[empNo]}") String empNo, @Value("#{jobParameters[platformCd]}") String platformCd) {
-        return new ItemReader<Authority>() {
-            @Override
-            public Authority read() throws Exception, UnexpectedInputException, ParseException, NonTransientResourceException {
-                log.info("empNo = {}", empNo);
-                log.info("platformCd = {}", platformCd);
-                String uri = "http://localhost:8080/authority/"+platformCd+ "/" + empNo;
-                RestTemplate restTemplate = new RestTemplate();
-                Object forObject = restTemplate.getForObject(uri, Object.class);//호출 결과를 우선 배열로 받고, 리스트로 변환
+    public ItemReader<OrderApiReadDto> ItemReader(RestTemplate restTemplate) {
+        return new OrderApiItemReader(restTemplate, "http://localhost:8080/test/api", 1, "", "");
 
-
-
-                //collectData = Arrays.asList(retArray);//배열을 리스트로 변환
-                log.info("Rest Call result : >>>>>>>" + forObject);
-                return null;
-            }
-        };
     }
 
-    private ItemWriter<Authority> jdbcCursorItemWriter() {
+/*    @Bean
+    public OrderApiItemReader tt() {
+        RestTemplate restTemplate = new RestTemplate();
+        return new OrderApiItemReader(restTemplate, "http://localhost:8080/test/api", 1, "", "");
+    }*/
+
+
+    private ItemWriter<OrderApiReadDto> jdbcCursorItemWriter() {
         return list -> {
-            for (Authority authority : list) {
-                log.info("Current authority = {}", authority);
+            for (OrderApiReadDto authority : list) {
+                log.info("Current authority = {}", authority.getEmpId());
             }
         };
+
+
+    }
+
+    @Bean
+    public JdbcBatchItemWriter<OrderApiReadDto> tttt() {
+        return new JdbcBatchItemWriterBuilder<OrderApiReadDto>()
+                .dataSource(dataSource)
+                .sql("insert into emp(emp_no, emp_id, emp_nm) values  (:empNo, :empId, :empNm)")
+                .beanMapped()
+                .build();
+
     }
 
 
