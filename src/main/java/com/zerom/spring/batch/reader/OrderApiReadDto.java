@@ -2,7 +2,10 @@ package com.zerom.spring.batch.reader;
 
 import com.google.gson.JsonObject;
 import lombok.*;
+import org.hibernate.annotations.SQLInsert;
 
+
+import javax.persistence.*;
 import java.util.List;
 
 /**
@@ -15,6 +18,8 @@ import java.util.List;
 @Setter
 @Data
 public class OrderApiReadDto {
+
+    private Long id;
     private String empNo;
     private String empId;
     private String empNm;

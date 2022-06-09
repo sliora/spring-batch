@@ -26,7 +26,7 @@ public class OrderApiItemReader implements ItemReader<OrderApiReadDto> {
     private final String parameterB;
 
     private List<OrderApiReadDto> orderData;
-    private int nextOrderIndex = 0;
+    private int nextOrderIndex;
 
     public OrderApiItemReader(RestTemplate restTemplate, String url, int pageSize, String parameterA, String parameterB) {
         if (pageSize > 1000) {
@@ -41,14 +41,12 @@ public class OrderApiItemReader implements ItemReader<OrderApiReadDto> {
 
     }
 
-    // 1건씩 읽어오는 메소드
     @Override
     public OrderApiReadDto read() throws Exception {
 
         if (resultsIsNotInitialized()) {
-            orderData = getForEntity();
+            orderData = Objects.requireNonNull(getForEntity()).getData();
         }
-
 
         OrderApiReadDto nextOrder = null;
 
@@ -67,7 +65,7 @@ public class OrderApiItemReader implements ItemReader<OrderApiReadDto> {
         return this.orderData == null;
     }
 
-    private List<OrderApiReadDto> getForEntity() {
+    private OrderApiReadCollectionDto getForEntity() {
         try {
             Map<String, Object> variables = new HashMap<>();
 
@@ -75,15 +73,14 @@ public class OrderApiItemReader implements ItemReader<OrderApiReadDto> {
             variables.put("parameterA", parameterA);
             variables.put("parameterB", parameterB);
 
-            ResponseEntity<OrderApiReadDto[]> responseEntity = restTemplate.getForEntity(url, OrderApiReadDto[].class, variables);
+            ResponseEntity<OrderApiReadCollectionDto> responseEntity = restTemplate.getForEntity(url, OrderApiReadCollectionDto.class, variables);
             HttpStatus httpStatus = responseEntity.getStatusCode();
 
             if (!OK.equals(httpStatus)) {
                 log.error("API 비정상 응답: httpStatus={}, pageSize={}, parameterA={}, parameterB={}", httpStatus, pageSize, parameterA, parameterB);
             }
 
-            OrderApiReadDto[] body = responseEntity.getBody();
-            return Arrays.asList(body);
+            return responseEntity.getBody();
         } catch (HttpClientErrorException hce) {
             log.error("API 요청 실패: statusCode={}, body={}", hce.getStatusCode(), hce.getResponseBodyAsString(), hce);
             return null;

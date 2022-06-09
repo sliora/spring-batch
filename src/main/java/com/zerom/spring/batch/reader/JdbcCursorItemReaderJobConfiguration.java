@@ -2,6 +2,7 @@ package com.zerom.spring.batch.reader;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.zerom.spring.batch.entity.Pay;
+import com.zerom.spring.batch.entity.Pay2;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
@@ -13,15 +14,20 @@ import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.item.*;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.JdbcCursorItemReader;
+import org.springframework.batch.item.database.JpaItemWriter;
+import org.springframework.batch.item.database.JpaPagingItemReader;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.database.builder.JdbcCursorItemReaderBuilder;
+import org.springframework.batch.item.database.builder.JpaPagingItemReaderBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.BeanPropertyRowMapper;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.client.RestTemplate;
 
+import javax.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,6 +39,7 @@ import java.util.List;
 public class JdbcCursorItemReaderJobConfiguration {
     private final JobBuilderFactory jobBuilderFactory;
     private final StepBuilderFactory stepBuilderFactory;
+    private final EntityManagerFactory entityManagerFactory;
     private final DataSource dataSource;
 
     private List<OrderApiReadDto> collectData = new ArrayList<>(); //Rest로 가져온 데이터를 리스트에 넣는다.
@@ -56,53 +63,38 @@ public class JdbcCursorItemReaderJobConfiguration {
         return stepBuilderFactory.get("jdbcCursorItemReaderStep")
                 .<OrderApiReadDto, OrderApiReadDto>chunk(chunkSize)
                 .reader(ItemReader(restTemplate()))
-                .writer(tttt())
+                //.processor(processor())
+                .writer(ItemWriter())
                 .build();
     }
 
-    @Bean
-    public JdbcCursorItemReader<Pay> jdbcCursorItemReader() {
-        return new JdbcCursorItemReaderBuilder<Pay>()
-                .fetchSize(chunkSize)
-                .dataSource(dataSource)
-                .rowMapper(new BeanPropertyRowMapper<>(Pay.class))
-                .sql("SELECT id, amount, tx_name, tx_date_time FROM pay")
-                .name("jdbcCursorItemReader")
-                .build();
-    }
 
     @Bean
     public ItemReader<OrderApiReadDto> ItemReader(RestTemplate restTemplate) {
         return new OrderApiItemReader(restTemplate, "http://localhost:8080/test/api", 1, "", "");
-
     }
 
 /*    @Bean
-    public OrderApiItemReader tt() {
-        RestTemplate restTemplate = new RestTemplate();
-        return new OrderApiItemReader(restTemplate, "http://localhost:8080/test/api", 1, "", "");
+    public ItemProcessor<OrderApiReadDto, OrderApiReadDto> processor() {
+        return OrderApiReadDto -> {
+            log.info("타니?");
+            log.info("OrderApiReadDto.getEmpId() = {}", OrderApiReadDto.getEmpId());
+            boolean isIgnoreTarget = OrderApiReadDto.getEmpId()  == "testid";
+            if(isIgnoreTarget){
+                log.info(">>>>>>>>> teacher name={}, isIgnoreTarget={}", OrderApiReadDto.getEmpNm(), isIgnoreTarget);
+                return null;
+            }
+
+            return OrderApiReadDto;
+        };
     }*/
 
-
-    private ItemWriter<OrderApiReadDto> jdbcCursorItemWriter() {
-        return list -> {
-            for (OrderApiReadDto authority : list) {
-                log.info("Current authority = {}", authority.getEmpId());
-            }
-        };
-
-
-    }
-
     @Bean
-    public JdbcBatchItemWriter<OrderApiReadDto> tttt() {
+    public JdbcBatchItemWriter<OrderApiReadDto> ItemWriter() {
         return new JdbcBatchItemWriterBuilder<OrderApiReadDto>()
                 .dataSource(dataSource)
-                .sql("insert into emp(emp_no, emp_id, emp_nm) values  (:empNo, :empId, :empNm)")
+                .sql("insert into emp(emp_no, emp_id, emp_nm) values (:empNo, :empId, :empNm) ON DUPLICATE KEY UPDATE emp_id = :empId, emp_nm = :empNm")
                 .beanMapped()
                 .build();
-
     }
-
-
 }
